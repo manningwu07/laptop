@@ -1,9 +1,12 @@
 /*
  * Problem 2 Sell My Pet Food
  */
+
+import java.io.IOException;
+
 public class TargetedAd {
 
-  public static void main(String[] args)
+  public static void main(String[] args) throws IOException
   {
     /*  
      * TODO:
@@ -33,8 +36,10 @@ public class TargetedAd {
 
 
     /* your code here */
-    
-     
+    DataCollector data = new DataCollector("socialMediaPosts1.csv", "targetWords.csv");
+    data.calculate_sentiment();
+    data.write_market("targetmarket.txt");
+    data.write_advertisements();
   }
 
 }

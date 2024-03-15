@@ -6,8 +6,12 @@
  * Copyright(c) 2019 PLTW to present. All rights reserved
  */
 import java.util.Scanner;
-import java.io.File;
+
+import org.apache.commons.csv.CSVFormat;
+import org.apache.commons.csv.CSVRecord;
+
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.io.*;
 
 /**
@@ -15,135 +19,126 @@ import java.io.*;
  */
 public class DataCollector
 {
-  private ArrayList<String> socialMediaPosts;
-  private ArrayList<String> targetWords;
-  private Scanner sc;
-  private int currentPost;
-  private int currentTargetWord;
+  private ArrayList<CSVRecord> socialMediaPosts = new ArrayList<CSVRecord>();
+  private ArrayList<CSVRecord> targetWords = new ArrayList<CSVRecord>();
+  private ArrayList<Double> sentiment = new ArrayList<Double>();
+  private ArrayList<String> market = new ArrayList<String>();
 
-  public DataCollector()
+  @SuppressWarnings("resource")
+  public DataCollector(String smp, String tw) throws IOException
   {
-    socialMediaPosts = new ArrayList<String>();
-    targetWords = new ArrayList<String>();
-    currentPost = 0;
-    currentTargetWord = 0;
+    Reader in = new FileReader(smp);
+    String[] socialMediaPostsHeaders = { "author", "title", "content"};
+    CSVFormat csvFormatPosts = CSVFormat.DEFAULT.builder()
+    .setHeader(socialMediaPostsHeaders)
+    .setSkipHeaderRecord(true)
+    .build();
+    for (CSVRecord r : csvFormatPosts.parse(in)) {
+      socialMediaPosts.add(r);
+      sentiment.add(0.0);
+    }
+
+    in = new FileReader(tw);
+    String[] targetWordsHeaders = {"word", "sentiment_rating"};
+    CSVFormat csvFormatTarget = CSVFormat.DEFAULT.builder()
+    .setHeader(targetWordsHeaders)
+    .setSkipHeaderRecord(true)
+    .build();
+    for (CSVRecord r : csvFormatTarget.parse(in)) {
+      targetWords.add(r);
+    }
   }
 
-  /**
-   * Gather the data contained in the files socialMediaPostsFilename and
-   * targetWordsFilename (including punctuation), with words separated by a single
-   * space
-   * 
-   * @param socialMediaPostsFilename the name of the file containing social media posts
-   * @param targetWordsFilename the name of the file containing the target words
-   */
-  public void setData(String socialMediaPostsFilename, String targetWordsFilename) {
-    // read in the social media posts found in socialMediaPosts
-    // a try is like an if statement, "throwing" an error if the body of the try fails
-    try
-    {
-      sc = new Scanner(new File(socialMediaPostsFilename));
-      while (sc.hasNextLine())
-      {
-        // String method trim removes whitespace before and after a string
-        String temp = sc.nextLine().trim();
-        // DEBUG: System.out.println(temp);
-        this.socialMediaPosts.add(temp);
+  public void calculate_sentiment() {
+    String content;
+    for (int i = 0; i < socialMediaPosts.size(); i++) {
+      CSVRecord key = socialMediaPosts.get(i);
+      content = key.get("content").toLowerCase();
+      for (CSVRecord w: targetWords) {
+        String word = w.get("word");
+        Double rating = Double.valueOf(w.get("sentiment_rating"));
+        if (rating < 0.5) {
+          rating *= -1.0;
+        }
+        if (content.indexOf(word) != -1) {
+          sentiment.set(i, sentiment.get(i) + rating);
+        }
       }
-    } catch (Exception e) { System.out.println("Error reading or parsing" + socialMediaPosts + "\n" + e); }
+    }
+  }
 
-    // read in the target words in targetWords
-    try
-    {
-      sc = new Scanner(new File(targetWordsFilename));
-      while (sc.hasNextLine())
-      {
-        // String method trim removes whitespace before and after a string
-        this.targetWords.add(sc.nextLine().trim());
+  public void write_market(String marketFile) {
+    try {
+      File myObj = new File(marketFile);
+      if (myObj.createNewFile()) {
+        System.out.println("File created: " + myObj.getName());
+      } else {
+        System.out.println("File already exists.");
       }
-    } catch (Exception e) { System.out.println("Error reading or parsing" + targetWords + "\n" + e); }
-  }
-
-  /**
-   * Get the next post in socialMediaPosts with words separated by a single space, 
-   * or "NONE" if there is no more data.
-   * 
-   * @return a string containing one of the lines in socialMediaPosts
-   */
-  public String getNextPost()
-  {
-    if (currentPost < socialMediaPosts.size())
-    {
-      this.currentPost++;
-      return socialMediaPosts.get(currentPost - 1);
+    } catch (IOException e) {
+      e.printStackTrace();
     }
-    else
-    {
-      return "NONE";
+    for (int i = 0; i < sentiment.size(); i++) {
+      if (sentiment.get(i) >= 3.0 && !market.contains(socialMediaPosts.get(i).get("author"))) {
+          try {
+            FileWriter myWriter = new FileWriter(marketFile, true);
+            myWriter.write(socialMediaPosts.get(i).get("author") + "\n");
+            myWriter.close();
+          } catch (IOException e) {
+            e.printStackTrace();
+          }
+          market.add(socialMediaPosts.get(i).get("author"));
+        }
     }
   }
 
-  /**
-   * Get the next line in targetWords, with words separated by a space,
-   * or "NONE" if there is no more data.
-   * 
-   * @return a string containing one of the lines in targetWords
-   */
-  public String getNextTargetWord()
-  {
-    if (currentTargetWord < targetWords.size())
-    {
-      this.currentTargetWord++;
-      return targetWords.get(currentTargetWord - 1);
-    }
-    else
-    {
-      this.currentTargetWord = 0;
-      return "NONE";
-    }
-  }
-
-  /**
-   * Create a File named filename and stores all the usernames to target
-   * 
-   * @param filename The name to save the file, must include .txt
-   * @param usernames A string containing the usernames of people to target,
-   * usernames are separated by a space.
-   */
-  public void prepareAdvertisement(String filename, String usernames, String advertisement)
-  {
-    try
-    {
-      FileWriter fw = new FileWriter(filename);
-      // Strin method split splits a string based on the provided token
-      // and returns an array of individual substrings
-      for (String un : usernames.split(" "))
-      {
-          fw.write("@" + un + " " + advertisement +"\n");
+  public void write_advertisements() {
+    try {
+      File myObj = new File("advertisement1.txt");
+      if (myObj.createNewFile()) {
+        System.out.println("File created: " + myObj.getName());
+      } else {
+        System.out.println("File already exists.");
       }
-      fw.close();
+    } catch (IOException e) {
+      e.printStackTrace();
     }
-    catch (IOException e)
-    {
-        System.out.println("Could not write to file. " + e);
+    try {
+      File myObj = new File("advertisement2.txt");
+      if (myObj.createNewFile()) {
+        System.out.println("File created: " + myObj.getName());
+      } else {
+        System.out.println("File already exists.");
+      }
+    } catch (IOException e) {
+      e.printStackTrace();
+    }
+    for (int i = 0; i < market.size(); i++) {
+      try {
+        FileWriter myWriter = new FileWriter("advertisement1.txt", true);
+        myWriter.write(market.get(i) + ", I'm sure you'll enjoy our NEW superComputer 2000. Buy it NOW. It's fast, sleek, and portable for all occasions." + "\n");
+        myWriter.close();
+      } catch (IOException e) {
+        e.printStackTrace();
+      }
+      try {
+        FileWriter myWriter = new FileWriter("advertisement2.txt", true);
+        myWriter.write(market.get(i) + ". NOW ON SALE: the NEW superComputer 2000. Buy now and get 30% off your order. While supplies last. " + "\n");
+        myWriter.close();
+      } catch (IOException e) {
+        e.printStackTrace();
+      }
+    }
+
+  }
+
+  public void print() {
+    for (CSVRecord r : targetWords) {
+      System.out.format("%s %s", r.get("word"), r.get("sentiment_rating"));
+    }
+    for (CSVRecord r : socialMediaPosts) {
+      System.out.format("%s %s %s", r.get("author"), r.get("title"), r.get("content"));
     }
   }
 
-  /**
-   * Print the array of posts
-   */
-  public void printAllPosts()
-  {
-    for (String post : this.socialMediaPosts)
-      System.out.println(post);
-  }
-
-  /**
-   * Print the array of target words
-   */
-  public void printAllTargetWords()
-  {
-    for (String word : this.targetWords)
-      System.out.println(word);
-  }
 }
